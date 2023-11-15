@@ -158,7 +158,7 @@ class EchoDownloader(object):
 
     def loginWithCredentials(self):
         _LOGGER.debug("Logging in with credentials")
-        # retrieve username / password if not given before
+        # Retrieve username/password if not given before
         if self._username is None or self._password is None:
             print("Credentials needed...")
             if self._username is None:
@@ -173,28 +173,45 @@ class EchoDownloader(object):
                 self._password = getpass.getpass(
                     "Passowrd for {0}: ".format(self._username)
                 )
-        # Input username and password:
-        # user_name = self._driver.find_element_by_id('j_username')
-        user_name = self.find_element_by_partial_id("username")
-        user_name.clear()
-        user_name.send_keys(self._username)
 
-        # user_passwd = self._driver.find_element_by_id('j_password')
-        user_passwd = self.find_element_by_partial_id("password")
-        user_passwd.clear()
-        user_passwd.send_keys(self._password)
-
+        # Wait for the username field to be present and interactable
         try:
-            login_btn = self._driver.find_element_by_id("login-btn")
+            user_name = WebDriverWait(self._driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, "//*[contains(@id,'username')]"))
+            )
+            user_name.clear()
+            user_name.send_keys(self._username)
+        except seleniumException.TimeoutException:
+            _LOGGER.error("Username field not found after waiting")
+            raise EchoLoginError(self._driver)
+
+        # Wait for the password field to be present and interactable
+        try:
+            user_passwd = WebDriverWait(self._driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, "//*[contains(@id,'password')]"))
+            )
+            user_passwd.clear()
+            user_passwd.send_keys(self._password)
+        except seleniumException.TimeoutException:
+            _LOGGER.error("Password field not found after waiting")
+            raise EchoLoginError(self._driver)
+
+        # Wait for the login button to be clickable and then click
+        try:
+            login_btn = WebDriverWait(self._driver, 10).until(
+                EC.element_to_be_clickable((By.ID, "login-btn"))
+            )
             login_btn.submit()
-        except seleniumException.NoSuchElementException:
-            # try submit via enter key
-            from selenium.webdriver.common.keys import Keys
+        except seleniumException.TimeoutException:
+            _LOGGER.error("Login button not clickable after waiting")
+            raise EchoLoginError(self._driver)
 
-            user_passwd.send_keys(Keys.RETURN)
-
-        # test if the login is success
-        if self.find_element_by_partial_id("username") is not None:
+        # Test if the login is successful
+        try:
+            WebDriverWait(self._driver, 10).until_not(
+                EC.presence_of_element_located((By.XPATH, "//*[contains(@id,'username')]"))
+            )
+        except seleniumException.TimeoutException:
             print("Failed!")
             print("  > Failed to login, is your username/password correct...?")
             raise EchoLoginError(self._driver)
